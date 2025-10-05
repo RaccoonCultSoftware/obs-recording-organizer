@@ -13,13 +13,16 @@ selected_source_name = ""
 
 function script_description()
     return [[<h2>Recording Organizer by Window Name</h2>
+<p><b>Version:</b> 1.0.0</p>
 <p>Automatically organizes finished recordings into subdirectories based on the captured window or application name.</p>
 <ul>
     <li>Runs automatically after each recording finishes</li>
     <li>Creates subdirectories named after the captured window/app</li>
     <li>Moves recordings into the appropriate subdirectory</li>
     <li>Select specific capture source or use auto-detect</li>
+    <li>Smart name cleaning (removes UnrealWindow:, -Win64-Shipping, .exe, etc.)</li>
 </ul>
+<p><b>Author:</b> Strychnine | <a href="https://github.com/rabbitcannon">GitHub</a> | <a href="https://raccooncult.com">RaccoonCult.com</a></p>
 <p><b>Note:</b> Ensure your recording output path is set in OBS Settings.</p>]]
 end
 
