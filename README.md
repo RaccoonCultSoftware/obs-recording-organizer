@@ -24,7 +24,7 @@ Automatically organizes your OBS Studio recordings into subdirectories based on 
 - ✅ **Smart Window Detection** - Extracts clean game/app names from capture sources
 - ✅ **Source Selection** - Choose specific capture source or use auto-detect
 - ✅ **Clean Folder Names** - Removes junk like `UnrealWindow:`, `-Win64-Shipping.exe`, underscores
-- ✅ **Multi-Platform** - Works on Windows and Linux
+- ✅ **Multi-Platform** - Works on Windows, Linux, and macOS
 - ✅ **Zero Dependencies** - Lua is built into OBS
 
 ## 📋 Requirements
@@ -75,8 +75,20 @@ When a recording stops:
 - ✅ **Window Capture** (Windows)
 - ✅ **Game Capture** (Windows)  
 - ✅ **XComposite** (Linux)
+- ✅ **macOS Screen Capture** (macOS)
 
-**Note:** Display Capture is not supported (doesn't provide window names)
+### macOS Screen Capture Setup (Important!)
+
+For macOS Screen Capture to work properly:
+
+1. Add a **macOS Screen Capture** source to your scene
+2. In source settings, set **Method** to **"Application"** (not Window or Display)
+3. Select the specific application you want to capture
+4. The script will extract the app name (e.g., "Chrome", "Blender", "Safari")
+
+**Alternative:** Rename your Screen Capture source to match what you're recording (e.g., "Blender Project") and the script will use that name.
+
+**Note:** Display Capture mode is not supported (doesn't provide window/app names)
 
 ## 🔧 Troubleshooting
 
@@ -86,12 +98,15 @@ When a recording stops:
 - Using Display Capture (not supported)
 - No Window/Game Capture source in scene
 - Game Capture in "any fullscreen" mode without window selection
+- **macOS:** Screen Capture set to "Display" or "Window" mode instead of "Application"
 
 **Solutions:**
-1. Use **Window Capture** or **Game Capture** sources
-2. Manually select your capture source in script settings dropdown
-3. Check **Script Log** to see what's being detected
-4. For Game Capture, try "Capture specific window" mode
+1. **Windows/Linux:** Use **Window Capture** or **Game Capture** sources
+2. **macOS:** Set Screen Capture method to **"Application"** and select an app
+3. **Alternative (macOS):** Rename your Screen Capture source to match what you're recording
+4. Manually select your capture source in script settings dropdown
+5. Check **Script Log** to see what's being detected
+6. For Game Capture, try "Capture specific window" mode
 
 ### Script Not Loading
 
@@ -107,7 +122,8 @@ When a recording stops:
 
 ### Dropdown is Empty
 
-- Add a Window Capture or Game Capture source to any scene
+- **Windows/Linux:** Add a Window Capture or Game Capture source to any scene
+- **macOS:** Add a macOS Screen Capture source to any scene
 - Click 🔄 refresh button in Scripts window
 
 ---

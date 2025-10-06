@@ -13,14 +13,15 @@ selected_source_name = ""
 
 function script_description()
     return [[<h2>Recording Organizer by Window Name</h2>
-<p><b>Version:</b> 1.0.0</p>
+<p><b>Version:</b> 1.1.0</p>
 <p>Automatically organizes finished recordings into subdirectories based on the captured window or application name.</p>
 <ul>
     <li>Runs automatically after each recording finishes</li>
     <li>Creates subdirectories named after the captured window/app</li>
     <li>Moves recordings into the appropriate subdirectory</li>
     <li>Select specific capture source or use auto-detect</li>
-    <li>Smart name cleaning (removes UnrealWindow:, -Win64-Shipping, .exe, etc.)</li>
+    <li>Smart name cleaning (removes UnrealWindow:, -Win64-Shipping, .exe, .app, etc.)</li>
+    <li>Cross-platform support: Windows, Linux, and macOS</li>
 </ul>
 <p><b>Author:</b> Strychnine | <a href="https://github.com/rabbitcannon">GitHub</a> | <a href="https://raccooncult.com">RaccoonCult.com</a></p>
 <p><b>Note:</b> Ensure your recording output path is set in OBS Settings.</p>]]
@@ -129,7 +130,7 @@ function populate_source_list(source_list_property)
             local source_id = obs.obs_source_get_id(source)
             
             -- Only add window capture and game capture sources
-            if source_id == "window_capture" or source_id == "game_capture" or source_id == "xcomposite_input" then
+            if source_id == "window_capture" or source_id == "game_capture" or source_id == "xcomposite_input" or source_id == "screen_capture" then
                 local source_name = obs.obs_source_get_name(source)
                 local source_type
                 
@@ -137,6 +138,8 @@ function populate_source_list(source_list_property)
                     source_type = "Window Capture"
                 elseif source_id == "game_capture" then
                     source_type = "Game Capture"
+                elseif source_id == "screen_capture" then
+                    source_type = "macOS Screen Capture"
                 else
                     source_type = "XComposite"
                 end
@@ -212,7 +215,7 @@ function find_specific_capture_source(scene, source_name)
         if current_source_name == source_name then
             local source_id = obs.obs_source_get_id(source)
             
-            if source_id == "window_capture" or source_id == "game_capture" or source_id == "xcomposite_input" then
+            if source_id == "window_capture" or source_id == "game_capture" or source_id == "xcomposite_input" or source_id == "screen_capture" then
                 local settings = obs.obs_source_get_settings(source)
                 window_name = extract_window_info_from_settings(source_id, settings, source)
                 obs.obs_data_release(settings)
@@ -253,7 +256,7 @@ function find_capture_source_name(scene)
         
         obs.script_log(obs.LOG_INFO, string.format("Recording Organizer: Source #%d: '%s' (type: %s)", i, source_name, source_id))
         
-        if source_id == "window_capture" or source_id == "game_capture" or source_id == "xcomposite_input" then
+        if source_id == "window_capture" or source_id == "game_capture" or source_id == "xcomposite_input" or source_id == "screen_capture" then
             found_sources = found_sources + 1
             obs.script_log(obs.LOG_INFO, "Recording Organizer: Found capture source! Extracting window info...")
             
@@ -285,6 +288,7 @@ function extract_window_info_from_settings(source_id, settings, source)
     
     if source_id == "window_capture" then
         -- Windows: window property format is "[executable.exe]: Window Title"
+        -- macOS: window property format is "Window Title" or "Application - Window Title"
         local window_str = obs.obs_data_get_string(settings, "window")
         obs.script_log(obs.LOG_INFO, "Recording Organizer: Window Capture - raw string: '" .. tostring(window_str) .. "'")
         
@@ -343,6 +347,43 @@ function extract_window_info_from_settings(source_id, settings, source)
         else
             obs.script_log(obs.LOG_WARNING, "Recording Organizer: XComposite has empty window string")
         end
+        
+    elseif source_id == "screen_capture" then
+        -- macOS Screen Capture: application property contains bundle ID
+        local capture_type = obs.obs_data_get_int(settings, "type")
+        obs.script_log(obs.LOG_INFO, "Recording Organizer: macOS Screen Capture - type: " .. tostring(capture_type))
+        
+        -- Type: 0 = Display, 1 = Window, 2 = Application
+        if capture_type == 2 then
+            -- Application capture
+            local app_bundle = obs.obs_data_get_string(settings, "application")
+            obs.script_log(obs.LOG_INFO, "Recording Organizer: macOS Screen Capture - bundle ID: '" .. tostring(app_bundle) .. "'")
+            
+            if app_bundle and app_bundle ~= "" then
+                -- Extract app name from bundle ID (e.g., "com.google.Chrome" -> "Chrome")
+                window_title = extract_app_name_from_bundle(app_bundle)
+            end
+        elseif capture_type == 1 then
+            -- Window capture - try to get window info
+            local window_id = obs.obs_data_get_int(settings, "window")
+            obs.script_log(obs.LOG_INFO, "Recording Organizer: macOS Screen Capture - window ID: " .. tostring(window_id))
+            
+            -- For window capture, use the source name if it's been customized
+            local source_name = obs.obs_source_get_name(source)
+            if source_name and source_name ~= "macOS Screen Capture" and source_name ~= "Screen Capture" then
+                window_title = source_name
+                obs.script_log(obs.LOG_INFO, "Recording Organizer: Using customized source name: '" .. window_title .. "'")
+            end
+        end
+        
+        -- Fallback to source name if nothing else worked
+        if not window_title or window_title == "" then
+            local source_name = obs.obs_source_get_name(source)
+            if source_name and source_name ~= "macOS Screen Capture" and source_name ~= "Screen Capture" then
+                window_title = source_name
+                obs.script_log(obs.LOG_INFO, "Recording Organizer: Using source name as fallback: '" .. window_title .. "'")
+            end
+        end
     end
     
     if window_title and window_title ~= "" then
@@ -352,6 +393,27 @@ function extract_window_info_from_settings(source_id, settings, source)
     end
     
     return window_title
+end
+
+function extract_app_name_from_bundle(bundle_id)
+    if not bundle_id or bundle_id == "" then
+        obs.script_log(obs.LOG_WARNING, "Recording Organizer: extract_app_name_from_bundle received empty bundle ID")
+        return nil
+    end
+    
+    obs.script_log(obs.LOG_INFO, "Recording Organizer: Extracting app name from bundle ID: '" .. bundle_id .. "'")
+    
+    -- Bundle IDs are in reverse domain notation: com.company.AppName
+    -- Extract the last component as the app name
+    local app_name = bundle_id:match("%.([^%.]+)$")
+    
+    if not app_name or app_name == "" then
+        -- If no dots found, use the whole string
+        app_name = bundle_id
+    end
+    
+    obs.script_log(obs.LOG_INFO, "Recording Organizer: Extracted app name: '" .. app_name .. "'")
+    return app_name
 end
 
 function extract_window_title(window_string)
@@ -389,7 +451,16 @@ function extract_window_title(window_string)
         return title
     end
     
-    -- Return the whole string if no pattern matched
+    -- macOS format: Try to extract after " - " separator ("Application - Window Title")
+    -- Example: "Google Chrome - YouTube" or "Blender - scene.blend"
+    title = window_string:match("^.+%s%-%s(.+)$")
+    if title and title ~= "" then
+        title = title:match("^%s*(.-)%s*$")  -- Trim whitespace
+        obs.script_log(obs.LOG_INFO, "Recording Organizer: Extracted using macOS ' - ' pattern: '" .. title .. "'")
+        return title
+    end
+    
+    -- Return the whole string if no pattern matched (works for macOS simple window titles)
     obs.script_log(obs.LOG_INFO, "Recording Organizer: No pattern matched, using full string: '" .. window_string .. "'")
     return window_string
 end
@@ -403,9 +474,9 @@ function sanitize_folder_name(name)
     
     local cleaned = name
     
-    -- Remove file extensions (.exe, .EXE, etc.)
-    cleaned = cleaned:gsub("%.exe$", ""):gsub("%.EXE$", "")
-    obs.script_log(obs.LOG_INFO, "Recording Organizer: After removing .exe: '" .. cleaned .. "'")
+    -- Remove file extensions (.exe, .EXE on Windows, .app on macOS)
+    cleaned = cleaned:gsub("%.exe$", ""):gsub("%.EXE$", ""):gsub("%.app$", "")
+    obs.script_log(obs.LOG_INFO, "Recording Organizer: After removing extensions: '" .. cleaned .. "'")
     
     -- Remove common Unreal Engine patterns BEFORE replacing underscores
     -- Handle both UnrealWindow_ and UnrealWindow: (colon variant)
@@ -476,14 +547,14 @@ function organize_recording(recording_path)
     -- Create the subdirectory path
     local target_folder = base_folder .. "/" .. window_name
     
-    -- Create the directory if it doesn't exist (Windows)
+    -- Create the directory if it doesn't exist
     local mkdir_cmd
     if package.config:sub(1,1) == "\\" then
         -- Windows
         target_folder = target_folder:gsub("/", "\\")
         mkdir_cmd = string.format('if not exist "%s" mkdir "%s"', target_folder, target_folder)
     else
-        -- Linux/Mac
+        -- Linux/macOS (Unix-based systems)
         mkdir_cmd = string.format('mkdir -p "%s"', target_folder)
     end
     
