@@ -6,6 +6,8 @@ obs = obslua
 -- Global variables
 recordings_base_folder = ""
 selected_source_name = ""
+recording_segments = {}  -- Track all segments from current recording session
+recording_base_path = ""  -- Base path to monitor for new segments
 
 -- ============================================================================
 -- OBS Script Callbacks
@@ -13,7 +15,7 @@ selected_source_name = ""
 
 function script_description()
     return [[<h2>Recording Organizer by Window Name</h2>
-<p><b>Version:</b> 1.1.0</p>
+<p><b>Version:</b> 1.3.0</p>
 <p>Automatically organizes finished recordings into subdirectories based on the captured window or application name.</p>
 <ul>
     <li>Runs automatically after each recording finishes</li>
@@ -21,6 +23,7 @@ function script_description()
     <li>Moves recordings into the appropriate subdirectory</li>
     <li>Select specific capture source or use auto-detect</li>
     <li>Smart name cleaning (removes UnrealWindow:, -Win64-Shipping, .exe, .app, etc.)</li>
+    <li>Auto-tracks and moves split recordings together (real-time monitoring)</li>
     <li>Cross-platform support: Windows, Linux, and macOS</li>
 </ul>
 <p><b>Author:</b> Strychnine | <a href="https://github.com/rabbitcannon">GitHub</a> | <a href="https://raccooncult.com">RaccoonCult.com</a></p>
@@ -94,6 +97,10 @@ function script_load(settings)
 end
 
 function script_unload()
+    -- Remove timer if active
+    if segment_check_timer then
+        obs.timer_remove(check_for_new_segments)
+    end
     obs.script_log(obs.LOG_INFO, "Recording Organizer: Script unloaded")
 end
 
@@ -101,19 +108,73 @@ end
 -- Event Handlers
 -- ============================================================================
 
+function check_for_new_segments()
+    -- Get current recording path
+    local current_path = obs.obs_frontend_get_last_recording()
+    
+    if current_path and current_path ~= "" then
+        -- Check if this is a new segment we haven't seen
+        local already_tracked = false
+        for _, path in ipairs(recording_segments) do
+            if path == current_path then
+                already_tracked = true
+                break
+            end
+        end
+        
+        if not already_tracked then
+            table.insert(recording_segments, current_path)
+            obs.script_log(obs.LOG_INFO, "Recording Organizer: Detected new segment: " .. current_path)
+        end
+    end
+end
+
 function on_event(event)
-    if event == obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED then
+    if event == obs.OBS_FRONTEND_EVENT_RECORDING_STARTING then
+        -- Clear segment tracking when a new recording starts
+        recording_segments = {}
+        recording_base_path = ""
+        obs.script_log(obs.LOG_INFO, "Recording Organizer: Recording starting, tracking segments...")
+        
+        -- Start monitoring for new segments every 2 seconds
+        obs.timer_add(check_for_new_segments, 2000)
+        
+    elseif event == obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED then
+        -- Stop monitoring for segments
+        obs.timer_remove(check_for_new_segments)
+        
         obs.script_log(obs.LOG_INFO, "Recording Organizer: Recording stopped, processing...")
         
         -- Get the last recording file path
         local recording_path = obs.obs_frontend_get_last_recording()
         
         if recording_path and recording_path ~= "" then
-            obs.script_log(obs.LOG_INFO, "Recording Organizer: Found recording at: " .. recording_path)
-            organize_recording(recording_path)
+            -- Add the last segment if not already tracked
+            local already_tracked = false
+            for _, path in ipairs(recording_segments) do
+                if path == recording_path then
+                    already_tracked = true
+                    break
+                end
+            end
+            
+            if not already_tracked then
+                table.insert(recording_segments, recording_path)
+            end
+            
+            obs.script_log(obs.LOG_INFO, string.format("Recording Organizer: Found %d segment(s) to organize", #recording_segments))
+            
+            -- Organize all segments
+            organize_recording_segments()
         else
             obs.script_log(obs.LOG_WARNING, "Recording Organizer: Could not retrieve recording path")
         end
+        
+    elseif event == obs.OBS_FRONTEND_EVENT_RECORDING_PAUSED then
+        obs.script_log(obs.LOG_INFO, "Recording Organizer: Recording paused")
+        
+    elseif event == obs.OBS_FRONTEND_EVENT_RECORDING_UNPAUSED then
+        obs.script_log(obs.LOG_INFO, "Recording Organizer: Recording resumed")
     end
 end
 
@@ -530,18 +591,24 @@ function sanitize_folder_name(name)
     return cleaned
 end
 
-function organize_recording(recording_path)
+function organize_recording_segments()
+    -- Check if we have any segments to organize
+    if #recording_segments == 0 then
+        obs.script_log(obs.LOG_WARNING, "Recording Organizer: No recording segments found")
+        return
+    end
+    
     -- Get the window/app name
     local window_name = get_active_window_name()
     obs.script_log(obs.LOG_INFO, "Recording Organizer: Detected window/app: " .. window_name)
     
-    -- Determine the base folder
+    -- Determine the base folder from first segment
     local base_folder
     if recordings_base_folder and recordings_base_folder ~= "" then
         base_folder = recordings_base_folder
     else
         -- Use the directory where the recording was saved
-        base_folder = recording_path:match("^(.+)[/\\]")
+        base_folder = recording_segments[1]:match("^(.+)[/\\]")
     end
     
     -- Create the subdirectory path
@@ -561,27 +628,36 @@ function organize_recording(recording_path)
     os.execute(mkdir_cmd)
     obs.script_log(obs.LOG_INFO, "Recording Organizer: Target folder: " .. target_folder)
     
-    -- Get the filename
-    local filename = recording_path:match("^.+[/\\](.+)$")
-    local target_path = target_folder .. "/" .. filename
-    
-    if package.config:sub(1,1) == "\\" then
-        target_path = target_path:gsub("/", "\\")
+    -- Move all tracked segment files
+    local moved_count = 0
+    for _, file_path in ipairs(recording_segments) do
+        local filename = file_path:match("^.+[/\\](.+)$")
+        local target_path = target_folder .. "/" .. filename
+        
+        if package.config:sub(1,1) == "\\" then
+            target_path = target_path:gsub("/", "\\")
+        end
+        
+        -- Handle duplicate filenames
+        if file_exists(target_path) then
+            target_path = get_unique_filename(target_path)
+        end
+        
+        -- Move the file
+        local success, err = os.rename(file_path, target_path)
+        
+        if success then
+            moved_count = moved_count + 1
+            obs.script_log(obs.LOG_INFO, "Recording Organizer: Successfully moved: " .. filename)
+        else
+            obs.script_log(obs.LOG_ERROR, "Recording Organizer: Failed to move '" .. filename .. "': " .. tostring(err))
+        end
     end
     
-    -- Handle duplicate filenames
-    if file_exists(target_path) then
-        target_path = get_unique_filename(target_path)
-    end
+    obs.script_log(obs.LOG_INFO, string.format("Recording Organizer: Moved %d/%d file(s) to: %s", moved_count, #recording_segments, target_folder))
     
-    -- Move the file
-    local success, err = os.rename(recording_path, target_path)
-    
-    if success then
-        obs.script_log(obs.LOG_INFO, "Recording Organizer: Successfully moved recording to: " .. target_path)
-    else
-        obs.script_log(obs.LOG_ERROR, "Recording Organizer: Failed to move file: " .. tostring(err))
-    end
+    -- Clear the segments after organizing
+    recording_segments = {}
 end
 
 function file_exists(path)

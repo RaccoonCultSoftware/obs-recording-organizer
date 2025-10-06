@@ -24,6 +24,7 @@ Automatically organizes your OBS Studio recordings into subdirectories based on 
 - ✅ **Smart Window Detection** - Extracts clean game/app names from capture sources
 - ✅ **Source Selection** - Choose specific capture source or use auto-detect
 - ✅ **Clean Folder Names** - Removes junk like `UnrealWindow:`, `-Win64-Shipping.exe`, underscores
+- ✅ **Split Recording Support** - Automatically detects and moves all split segments together
 - ✅ **Multi-Platform** - Works on Windows, Linux, and macOS
 - ✅ **Zero Dependencies** - Lua is built into OBS
 
@@ -54,8 +55,9 @@ When a recording stops:
 1. Script detects your Window/Game Capture source
 2. Extracts the window/game name
 3. Cleans up the name (removes `.exe`, `UnrealWindow:`, `-Win64-Shipping`, etc.)
-4. Creates a folder with that name
-5. Moves the recording into the folder
+4. Automatically finds all split recording segments (if using auto-split)
+5. Creates a folder with that name
+6. Moves all recording file(s) into the folder
 
 ### Example Folder Structure
 
@@ -66,6 +68,10 @@ When a recording stops:
 │   └── 2025-10-05_17-15-22.mkv
 ├── 📁 Google Chrome/
 │   └── 2025-10-05_18-00-10.mkv
+├── 📁 Blender/    ← Auto-split recording with 3 segments
+│   ├── 2025-10-06_10-00-00.mov
+│   ├── 2025-10-06_10-00-00_1.mov
+│   └── 2025-10-06_10-00-00_2.mov
 └── 📁 Unknown/    ← If no capture source detected
     └── 2025-10-05_20-00-00.mkv
 ```
@@ -89,6 +95,37 @@ For macOS Screen Capture to work properly:
 **Alternative:** Rename your Screen Capture source to match what you're recording (e.g., "Blender Project") and the script will use that name.
 
 **Note:** Display Capture mode is not supported (doesn't provide window/app names)
+
+## 🎬 Split Recording Support
+
+The script **automatically tracks and organizes split recordings** in real-time when you use OBS's auto-split feature (Settings → Advanced → Recording → "Automatically split file every X minutes/MB").
+
+### How It Works:
+- **Real-time monitoring**: Checks for new segments every 2 seconds during recording
+- Tracks each segment as it's created (OBS creates new files with different timestamps)
+- When recording stops, all tracked segments are moved together
+- **No configuration needed** - it just works!
+
+### Example:
+OBS creates these files during a split recording:
+- `2025-10-06 11-50-20.mov` (segment 1 - 50 MB)
+- `2025-10-06 11-51-28.mov` (segment 2 - 50 MB, split at 68 seconds)
+- `2025-10-06 11-52-34.mov` (segment 3 - final segment)
+
+All three are automatically moved to the same `pycharm` folder when you stop recording.
+
+### Example Log Output:
+```
+Recording Organizer: Recording starting, tracking segments...
+Recording Organizer: Detected new segment: 2025-10-06 11-50-20.mov
+Recording Organizer: Detected new segment: 2025-10-06 11-51-28.mov
+Recording Organizer: Recording stopped, processing...
+Recording Organizer: Found 3 segment(s) to organize
+Recording Organizer: Successfully moved: 2025-10-06 11-50-20.mov
+Recording Organizer: Successfully moved: 2025-10-06 11-51-28.mov
+Recording Organizer: Successfully moved: 2025-10-06 11-52-34.mov
+Recording Organizer: Moved 3/3 file(s) to: Recordings/pycharm
+```
 
 ## 🔧 Troubleshooting
 
