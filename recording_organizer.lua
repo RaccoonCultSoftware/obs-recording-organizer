@@ -14,7 +14,7 @@ recording_base_path = ""  -- Base path to monitor for new segments
 -- ============================================================================
 
 function script_description()
-    return [[<h2>Recording Organizer by Window Name</h2>
+    return [[<h2>Recording Organizer</h2>
 <p><b>Version:</b> 1.3.0</p>
 <p>Automatically organizes finished recordings into subdirectories based on the captured window or application name.</p>
 <ul>
