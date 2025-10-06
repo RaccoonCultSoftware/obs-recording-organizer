@@ -61,12 +61,12 @@ When a recording stops:
 
 ```
 📁 Recordings/
-├── 📁 Project Plague/          ← UnrealWindow:Project_Plague-Win64-Shipping.exe
+├── 📁 HellIsUs/
 │   ├── 2025-10-05_16-30-45.mkv
 │   └── 2025-10-05_17-15-22.mkv
 ├── 📁 Google Chrome/
 │   └── 2025-10-05_18-00-10.mkv
-└── 📁 Unknown/                 ← If no capture source detected
+└── 📁 Unknown/    ← If no capture source detected
     └── 2025-10-05_20-00-00.mkv
 ```
 
