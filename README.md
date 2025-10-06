@@ -1,6 +1,8 @@
-# OBS Recording Organizer
+# Recording Organizer
 
 Automatically organizes your OBS Studio recordings into subdirectories based on the captured window or application name.
+
+![Recording Organizer Screenshot](assets/images/screenshot.png "Main application interface")
 
 **Zero setup required** - Just load the script and start recording!
 
@@ -8,7 +10,7 @@ Automatically organizes your OBS Studio recordings into subdirectories based on 
 
 ## 🚀 Quick Start (30 seconds)
 
-1. **Download** `obs_recording_organizer.lua`
+1. **Download** `recording_organizer.lua`
 2. **Open OBS** → `Tools` → `Scripts`
 3. **Click `+`** (Add Scripts)
 4. **Select** the `.lua` file
@@ -94,7 +96,7 @@ When a recording stops:
 ### Script Not Loading
 
 - Check **Script Log** for error messages
-- Ensure you selected `obs_recording_organizer.lua`
+- Ensure you selected `recording_organizer.lua`
 - Reload script with 🔄 refresh button
 
 ### Recordings Aren't Moving
